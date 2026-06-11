@@ -46,7 +46,7 @@ class FakeHeteroClient:
         self.async_mget_h2d = MagicMock()
         self.async_mset_d2h = MagicMock()
 
-    def init(self):
+    def init(self, *args, **kwargs):
         return 0
 
 
@@ -141,7 +141,7 @@ class TestInit:
     def test_init_when_client_init_fails_raises_runtime_error(self, mock_sdk):
         """If HeteroClient.init() returns non-zero, raise RuntimeError."""
         class FailingHeteroClient(FakeHeteroClient):
-            def init(self):
+            def init(self, *args, **kwargs):
                 return -1
 
         with patch("yr.datasystem.hetero_client.HeteroClient", FailingHeteroClient):
