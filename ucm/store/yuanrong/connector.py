@@ -67,6 +67,13 @@ class UcmYuanrongStore(UcmKVStoreBaseV1):
             self.port,
             connect_timeout_ms=self.timeout_ms,
         )
+        ret = self.client.init()
+
+        if ret != 0:
+            raise RuntimeError(
+                f"Failed to initialize HeteroClient with {self.host}:{self.port}, "
+                f"return code: {ret}."
+            )
 
         logger.info(
             "UcmYuanrongStore initialized: host=%s, port=%s, device_id=%s, timeout_ms=%s",

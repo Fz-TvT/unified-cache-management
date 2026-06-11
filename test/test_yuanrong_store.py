@@ -46,6 +46,9 @@ class FakeHeteroClient:
         self.async_mget_h2d = MagicMock()
         self.async_mset_d2h = MagicMock()
 
+    def init(self):
+        return 0
+
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -134,6 +137,16 @@ class TestInit:
         """When the yuanrong SDK is not installed, init should raise ImportError."""
         with pytest.raises(ImportError, match="yuanrong"):
             UcmYuanrongStore({"host": "127.0.0.1", "port": 18482})
+
+    def test_init_when_client_init_fails_raises_runtime_error(self, mock_sdk):
+        """If HeteroClient.init() returns non-zero, raise RuntimeError."""
+        class FailingHeteroClient(FakeHeteroClient):
+            def init(self):
+                return -1
+
+        with patch("yr.datasystem.hetero_client.HeteroClient", FailingHeteroClient):
+            with pytest.raises(RuntimeError, match="Failed to initialize"):
+                UcmYuanrongStore({"host": "127.0.0.1", "port": 18482})
 
 
 # ---------------------------------------------------------------------------
