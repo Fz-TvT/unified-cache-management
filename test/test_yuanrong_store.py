@@ -41,8 +41,8 @@ class FakeHeteroClient:
         self.init_called = False
         self.init_host = None
         self.init_port = None
-        self.exist_return = []
         # MagicMock 作为方法，调用后自动记录调用信息并返回 MagicMock
+        self.exist = MagicMock()
         self.async_mget_h2d = MagicMock()
         self.async_mset_d2h = MagicMock()
 
@@ -51,9 +51,6 @@ class FakeHeteroClient:
         self.init_host = host
         self.init_port = port
         return 0
-
-    def exist(self, keys):
-        return self.exist_return
 
 
 # ---------------------------------------------------------------------------
@@ -175,7 +172,7 @@ class TestLookup:
     def test_lookup_calls_exist_with_correct_keys(self, store):
         """lookup() should call client.exist() with encoded keys (shard_index=0)."""
         block_ids = [b"aabb", b"ccdd"]
-        store.client.exist_return = [True, False]
+        store.client.exist.return_value = [True, False]
 
         result = store.lookup(block_ids)
 
@@ -198,22 +195,22 @@ class TestLookup:
 class TestLookupOnPrefix:
     def test_all_hit(self, store):
         """When all blocks exist, return the last index."""
-        store.client.exist_return = [True, True, True]
+        store.client.exist.return_value = [True, True, True]
         assert store.lookup_on_prefix([b"a", b"b", b"c"]) == 2
 
     def test_partial_hit(self, store):
         """When some blocks miss, return the index before the first miss."""
-        store.client.exist_return = [True, True, False, True]
+        store.client.exist.return_value = [True, True, False, True]
         assert store.lookup_on_prefix([b"a", b"b", b"c", b"d"]) == 1
 
     def test_first_miss(self, store):
         """When the first block is missing, return -1."""
-        store.client.exist_return = [False, True, True]
+        store.client.exist.return_value = [False, True, True]
         assert store.lookup_on_prefix([b"a", b"b", b"c"]) == -1
 
     def test_all_miss(self, store):
         """When all blocks are missing, return -1."""
-        store.client.exist_return = [False, False]
+        store.client.exist.return_value = [False, False]
         assert store.lookup_on_prefix([b"a", b"b"]) == -1
 
 

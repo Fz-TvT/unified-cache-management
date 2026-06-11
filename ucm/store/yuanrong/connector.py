@@ -49,8 +49,8 @@ class UcmYuanrongStore(UcmKVStoreBaseV1):
             ) from e
 
         # Read configuration
-        self.host = config.get("host", "127.0.0.1")
-        self.port = config.get("port", 18482)
+        self.host = config.get("host")
+        self.port = config.get("port")
         self.key_prefix = config.get("key_prefix", "ucm")
         self.device_id = config.get("device_id", 0)
         self.tensor_size_list = config.get("tensor_size_list", None)
