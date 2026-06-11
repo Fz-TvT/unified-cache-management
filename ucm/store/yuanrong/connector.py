@@ -62,7 +62,9 @@ class UcmYuanrongStore(UcmKVStoreBaseV1):
             raise ValueError("'port' must be specified in config for UcmYuanrongStore")
 
         # Initialize HeteroClient and connect to yuanrong worker
+        
         ret = self._HeteroClient().init(self.host, self.port)
+        self.client = ret
         if ret != 0:
             raise RuntimeError(
                 f"Failed to initialize HeteroClient with {self.host}:{self.port}, "
