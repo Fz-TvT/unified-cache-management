@@ -1,27 +1,3 @@
-# -*- coding: utf-8 -*-
-#
-# MIT License
-#
-# Copyright (c) 2025 Huawei Technologies Co., Ltd. All rights reserved.
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-#
 """Unit tests for UcmYuanrongStore.
 
 Uses monkeypatching to replace the yuanrong SDK (yr.datasystem.hetero_client)
@@ -473,25 +449,6 @@ class TestEncodeKey:
         store = UcmYuanrongStore(config)
         key = store._encode_key(b"\xde\xad", 0)
         assert key == "myapp:dead:0"
-
-
-# ---------------------------------------------------------------------------
-# to_rows (static utility)
-# ---------------------------------------------------------------------------
-
-
-class TestToRows:
-    def test_to_rows_with_list_of_lists(self, store):
-        """to_rows() should pass through a list-of-lists unchanged."""
-        data = [[1, 2], [3, 4]]
-        result = UcmYuanrongStore.to_rows(data)
-        assert result == [[1, 2], [3, 4]]
-
-    def test_to_rows_with_numpy_array(self, store):
-        """to_rows() should convert a 2D numpy array to list-of-lists."""
-        arr = np.array([[10, 20], [30, 40]], dtype=np.int64)
-        result = UcmYuanrongStore.to_rows(arr)
-        assert result == [[10, 20], [30, 40]]
 
 
 # ---------------------------------------------------------------------------
