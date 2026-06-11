@@ -343,4 +343,3 @@ class UcmYuanrongStore(UcmKVStoreBaseV1):
 
         """
         return False
-    def 
