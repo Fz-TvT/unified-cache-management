@@ -207,7 +207,7 @@ class UcmYuanrongStore(UcmKVStoreBaseV1):
         """
         keys = self._build_keys(block_ids, shard_index)
         # Build DeviceBlobList
-        dev_blob_lists = self._build_blob_lists(block_ids, self.to_rows(dst_addr))
+        dev_blob_lists = self._build_blob_lists(block_ids, dst_addr)
 
         try:
             future = self.client.async_mget_h2d(keys, dev_blob_lists, self.timeout_ms)
@@ -240,7 +240,7 @@ class UcmYuanrongStore(UcmKVStoreBaseV1):
 
         """
         keys = self._build_keys(block_ids, shard_index)
-        dev_blob_lists = self._build_blob_lists(block_ids, self.to_rows(src_addr))
+        dev_blob_lists = self._build_blob_lists(block_ids, src_addr)
 
         # Create SetParam (use default for now)
         set_param = self._SetParam()
@@ -301,7 +301,7 @@ class UcmYuanrongStore(UcmKVStoreBaseV1):
             shard_index=shard_index,
             src_addr=[[t.data_ptr() for t in row] for row in src_tensor],
         )
-
+ 
     def wait(self, task: Task) -> None:
         """Block until the given transfer task completes.
 
@@ -343,16 +343,4 @@ class UcmYuanrongStore(UcmKVStoreBaseV1):
 
         """
         return False
-
-    @staticmethod
-    def to_rows(addr)->List[List[int]]:
-        """Convert a 2D structure of addresses to a list of lists of ints.
-
-        Handles both list-of-lists and 2D numpy array inputs.
-
-        Args:
-            addr: Either a list of lists of ints or a 2D numpy array.
-        """
-        if hasattr(addr, "tolist"):
-            return addr.tolist()
-        return [list(row) for row in addr]
+    def 
