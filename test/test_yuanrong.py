@@ -21,7 +21,7 @@ logger = init_logger(__name__)
 # ---------------------------------------------------------------------------
 YUANRONG_CONFIG = {
     "host": "127.0.0.1",
-    "port": 18482,
+    "port": 31501,
     "tensor_size_list": [1024],  # 1 tensor per block, 1024 bytes each
 }
 
