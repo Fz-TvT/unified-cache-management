@@ -66,8 +66,9 @@ class FakeHeteroClient:
         self.init_host = None
         self.init_port = None
         self.exist_return = []
-        self.async_mget_h2d_return = MagicMock()
-        self.async_mset_d2h_return = MagicMock()
+        # MagicMock 作为方法，调用后自动记录调用信息并返回 MagicMock
+        self.async_mget_h2d = MagicMock()
+        self.async_mset_d2h = MagicMock()
 
     def init(self, host, port):
         self.init_called = True
@@ -77,12 +78,6 @@ class FakeHeteroClient:
 
     def exist(self, keys):
         return self.exist_return
-
-    def async_mget_h2d(self, keys, dev_blob_lists, timeout_ms):
-        return self.async_mget_h2d_return
-
-    def async_mset_d2h(self, keys, dev_blob_lists, set_param):
-        return self.async_mset_d2h_return
 
 
 # ---------------------------------------------------------------------------
