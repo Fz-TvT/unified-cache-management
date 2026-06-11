@@ -23,7 +23,6 @@ class UcmYuanrongTask(Task):
     future: object
     keys: List[str]
 
-
 class UcmYuanrongStore(UcmKVStoreBaseV1):
     """A KV cache store implementation backed by yuanrong data system.
     This store implements the UcmKVStoreBaseV1 interface by adapting UCM block
@@ -54,7 +53,6 @@ class UcmYuanrongStore(UcmKVStoreBaseV1):
         self.port = config.get("port", 18482)
         self.key_prefix = config.get("key_prefix", "ucm")
         self.device_id = config.get("device_id", 0)
-        self.tensor_size = config.get("tensor_size", 1048576)   # Default 1MB per tensor if not specified
         self.tensor_size_list = config.get("tensor_size_list", None)
         self.timeout_ms = config.get("timeout_ms", DEFAULT_TIMEOUT_MS)
 
@@ -80,9 +78,22 @@ class UcmYuanrongStore(UcmKVStoreBaseV1):
             self.timeout_ms,
         )
 
-    # ------------------------------------------------------------------
-    # Key encoding
-    # ------------------------------------------------------------------
+    def _build_keys(self, block_ids: List[bytes], shard_index: List[int]) -> List[str]:
+        """Build yuanrong keys from block IDs and shard indices.
+
+        Args:
+            block_ids: List of vLLM block hashes as raw bytes.
+            shard_index: List of shard indices corresponding to each block ID.
+        """
+        if shard_index is None:
+            shard_index = [0] * len(block_ids)
+        if len(block_ids) != len(shard_index):
+            raise ValueError(
+                f"block_ids length ({len(block_ids)}) != shard_index length "
+                f"({len(shard_index)})."
+            )
+
+        return [self._encode_key(bid, sid) for bid, sid in zip(block_ids, shard_index)]
 
     def _encode_key(self, block_id: bytes, shard_index: int) -> str:
         """Generate a stable string key for yuanrong.
@@ -92,15 +103,9 @@ class UcmYuanrongStore(UcmKVStoreBaseV1):
         Args:
             block_id: vLLM block hash as raw bytes.
             shard_index: Shard index for TP/layer distinction.
-
-        Returns:
-            Stable string key used as yuanrong key.
         """
         return f"{self.key_prefix}:{block_id.hex()}:{shard_index}"
 
-    # ------------------------------------------------------------------
-    # UcmKVStoreBaseV1 interface
-    # ------------------------------------------------------------------
 
     def cc_store(self) -> int:
         """Return low-level C/C++ pointer to the underlying store.
@@ -118,12 +123,6 @@ class UcmYuanrongStore(UcmKVStoreBaseV1):
 
         Args:
             block_ids: List of vLLM block hashes (raw bytes).
-
-        Returns:
-            List of booleans, True if the corresponding block exists.
-
-        Raises:
-            RuntimeError: If the exist call fails.
         """
         keys = [self._encode_key(bid, 0) for bid in block_ids]
         try:
@@ -141,9 +140,6 @@ class UcmYuanrongStore(UcmKVStoreBaseV1):
 
         Args:
             block_ids: List of vLLM block hashes (raw bytes).
-
-        Returns:
-            Index of the last consecutive hit, or -1 if the first block misses.
         """
         res = self.lookup(block_ids)
         for i, hit in enumerate(res):   
@@ -158,57 +154,40 @@ class UcmYuanrongStore(UcmKVStoreBaseV1):
         """
         pass
 
-    # ------------------------------------------------------------------
-    # Raw-address-based transfer (load_data / dump_data)
-    # ------------------------------------------------------------------
-    def _build_dev_blob_list(self, addrs: List[int], sizes: List[int]):
-        """Build a DeviceBlobList from address and size lists.
+    def blob_size(self, block_index: int) -> int:
+        if self.tensor_size_list is None:
+            raise ValueError("tensor_size_list must be provided in config to use blob_size()")
+        if len(self.tensor_size_list) == 1:
+            return self.tensor_size_list[0]
+        if block_index >= len(self.tensor_size_list):
+            raise IndexError(f"block_index {block_index} out of range for tensor_size_list of length {len(self.tensor_size_list)}")
+        return self.tensor_size_list[block_index]
+
+    def _build_blob_lists(self, block_ids: List[bytes], addr_rows: List[List[int]]):
+        """Build a list of DeviceBlobList from address rows and corresponding size rows.
 
         Args:
-            addrs: List of device memory pointers.
-            sizes: List of transfer sizes in bytes, corresponding to each address.
-
-        Returns:
-            A DeviceBlobList instance.
+            addr_rows: 2D list of device addresses, one inner list per block.
+            size_rows: 2D list of sizes, matching addr_rows structure.
         """
-        blob_list = [self._Blob(ptr, sz) for ptr, sz in zip(addrs, sizes)]
-        return self._DeviceBlobList(dev_idx=self.device_id, blob_list=blob_list)
-
-    def _resolve_sizes_for_addr_matrix(
-        self, addr_matrix: List[List[int]]
-    ) -> List[List[int]]:
-        """Resolve transfer sizes for a 2D address matrix.
-
-        Uses ``tensor_size_list`` or ``tensor_size`` from config. Each inner
-        list may have a different number of elements (different layers may have
-        different numbers of KV tensors).
-
-        Args:
-            addr_matrix: 2D list of device pointers, where ``addr_matrix[i]``
-                contains pointers for block ``i``.
-
-        Returns:
-            2D list of sizes matching the structure of ``addr_matrix``.
-
-        """
-        if self.tensor_size_list is not None:
-            # tensor_size_list must be a 2D list matching addr_matrix structure
-            if len(self.tensor_size_list) != len(addr_matrix):
-                raise ValueError(
-                    f"tensor_size_list length ({len(self.tensor_size_list)}) "
-                    f"does not match addr matrix length ({len(addr_matrix)})."
-                )
-            return self.tensor_size_list
-
-        if self.tensor_size is not None:
-            # Single size for all: broadcast to match addr_matrix structure
-            return [[self.tensor_size] * len(addrs) for addrs in addr_matrix]
-
-        raise ValueError(
-            "tensor_size or tensor_size_list must be set in config when using "
-            "load_data/dump_data. Yuanrong requires explicit transfer sizes."
-        )
-
+        if len(block_ids) != len(addr_rows):
+            raise ValueError(
+                f"Length of block_ids ({len(block_ids)}) must match length of "
+                f"addr_rows ({len(addr_rows)})."
+            )
+        
+        blob_lists = []
+        for row in addr_rows:
+            blobs = [
+                self._Blob(int(ptr), self.blob_size(blob_index)) for blob_index, ptr in enumerate(row)
+            ]
+            if not blobs:
+                raise ValueError("addr_rows must not contain empty rows")
+            blob_lists.append(
+                self._DeviceBlobList(dev_idx=self.device_id, blob_list=blobs)
+            )
+        return blob_lists
+        
     def load_data(
         self,
         block_ids: List[bytes],
@@ -225,43 +204,10 @@ class UcmYuanrongStore(UcmKVStoreBaseV1):
             shard_index: Shard index for each block.
             dst_addr: 2D structure where ``dst_addr[i]`` is a list of device
                 pointers for block ``i``.
-
-        Returns:
-            A UcmYuanrongTask wrapping the yuanrong Future.
-
-        Raises:
-            ValueError: If input lengths don't match.
-            RuntimeError: If the yuanrong call fails.
         """
-        if len(block_ids) != len(shard_index):
-            raise ValueError(
-                f"block_ids length ({len(block_ids)}) != shard_index length "
-                f"({len(shard_index)})."
-            )
-
-        # Encode keys
-        keys = [self._encode_key(bid, sid) for bid, sid in zip(block_ids, shard_index)]
-
-        # Normalize dst_addr to list of lists
-        if isinstance(dst_addr, np.ndarray):
-            addr_list = dst_addr.tolist()
-        else:
-            addr_list = dst_addr
-
-        if len(addr_list) != len(block_ids):
-            raise ValueError(
-                f"dst_addr length ({len(addr_list)}) != block_ids length "
-                f"({len(block_ids)})."
-            )
-
-        # Resolve sizes
-        size_matrix = self._resolve_sizes_for_addr_matrix(addr_list)
-
-        # Build one DeviceBlobList per key
-        dev_blob_lists = [
-            self._build_dev_blob_list(addrs, sizes)
-            for addrs, sizes in zip(addr_list, size_matrix)
-        ]
+        keys = self._build_keys(block_ids, shard_index)
+        # Build DeviceBlobList
+        dev_blob_lists = self._build_blob_lists(block_ids, self.to_rows(dst_addr))
 
         try:
             future = self.client.async_mget_h2d(keys, dev_blob_lists, self.timeout_ms)
@@ -291,38 +237,10 @@ class UcmYuanrongStore(UcmKVStoreBaseV1):
                 pointers for block ``i``.
             prerequisite_handle: Optional event handle for stream sync (unused
                 in current yuanrong implementation).
-        Returns:
-            A UcmYuanrongTask wrapping the yuanrong Future.
+
         """
-        if len(block_ids) != len(shard_index):
-            raise ValueError(
-                f"block_ids length ({len(block_ids)}) != shard_index length "
-                f"({len(shard_index)})."
-            )
-
-        # Encode keys
-        keys = [self._encode_key(bid, sid) for bid, sid in zip(block_ids, shard_index)]
-
-        # Normalize src_addr to list of lists
-        if isinstance(src_addr, np.ndarray):
-            addr_list = src_addr.tolist()
-        else:
-            addr_list = src_addr
-
-        if len(addr_list) != len(block_ids):
-            raise ValueError(
-                f"src_addr length ({len(addr_list)}) != block_ids length "
-                f"({len(block_ids)})."
-            )
-
-        # Resolve sizes
-        size_matrix = self._resolve_sizes_for_addr_matrix(addr_list)
-
-        # Build one DeviceBlobList per key
-        dev_blob_lists = [
-            self._build_dev_blob_list(addrs, sizes)
-            for addrs, sizes in zip(addr_list, size_matrix)
-        ]
+        keys = self._build_keys(block_ids, shard_index)
+        dev_blob_lists = self._build_blob_lists(block_ids, self.to_rows(src_addr))
 
         # Create SetParam (use default for now)
         set_param = self._SetParam()
@@ -335,10 +253,6 @@ class UcmYuanrongStore(UcmKVStoreBaseV1):
             ) from e
 
         return UcmYuanrongTask(future=future, keys=keys)
-
-    # ------------------------------------------------------------------
-    # Tensor-based transfer (load / dump)
-    # ------------------------------------------------------------------
 
     def load(
         self,
@@ -357,38 +271,12 @@ class UcmYuanrongStore(UcmKVStoreBaseV1):
             dst_tensor: Double-list where ``dst_tensor[i][j]`` is the
                 destination tensor on device for block ``i``, tensor ``j``.
 
-        Returns:
-            A UcmYuanrongTask wrapping the yuanrong Future.
         """
-        if len(block_ids) != len(shard_index):
-            raise ValueError(
-                f"block_ids length ({len(block_ids)}) != shard_index length "
-                f"({len(shard_index)})."
-            )
-        if len(block_ids) != len(dst_tensor):
-            raise ValueError(
-                f"block_ids length ({len(block_ids)}) != dst_tensor length "
-                f"({len(dst_tensor)})."
-            )
-
-        keys = [self._encode_key(bid, sid) for bid, sid in zip(block_ids, shard_index)]
-
-        # Build one DeviceBlobList per block from its tensor list
-        dev_blob_lists = []
-        for tensor_list in dst_tensor:
-            blobs = [self._Blob(t.data_ptr(), t.nbytes) for t in tensor_list]
-            dev_blob_lists.append(
-                self._DeviceBlobList(dev_idx=self.device_id, blob_list=blobs)
-            )
-
-        try:
-            future = self.client.async_mget_h2d(keys, dev_blob_lists, self.timeout_ms)
-        except Exception as e:
-            raise RuntimeError(
-                f"async_mget_h2d failed for {len(keys)} keys: {e}"
-            ) from e
-
-        return UcmYuanrongTask(future=future, keys=keys)
+        return self.load_data(
+            block_ids=block_ids,
+            shard_index=shard_index,
+            dst_addr=[[t.data_ptr() for t in row] for row in dst_tensor],
+        )
 
     def dump(
         self,
@@ -407,45 +295,12 @@ class UcmYuanrongStore(UcmKVStoreBaseV1):
             src_tensor: Double-list where ``src_tensor[i][j]`` is the
                 source tensor on device for block ``i``, tensor ``j``.
 
-        Returns:
-            A UcmYuanrongTask wrapping the yuanrong Future.
         """
-        if len(block_ids) != len(shard_index):
-            raise ValueError(
-                f"block_ids length ({len(block_ids)}) != shard_index length "
-                f"({len(shard_index)})."
-            )
-        if len(block_ids) != len(src_tensor):
-            raise ValueError(
-                f"block_ids length ({len(block_ids)}) != src_tensor length "
-                f"({len(src_tensor)})."
-            )
-
-        keys = [self._encode_key(bid, sid) for bid, sid in zip(block_ids, shard_index)]
-
-        # Build one DeviceBlobList per block from its tensor list
-        dev_blob_lists = []
-        for tensor_list in src_tensor:
-            blobs = [self._Blob(t.data_ptr(), t.nbytes) for t in tensor_list]
-            dev_blob_lists.append(
-                self._DeviceBlobList(dev_idx=self.device_id, blob_list=blobs)
-            )
-
-        # Create SetParam (use default for now)
-        set_param = self._SetParam()
-
-        try:
-            future = self.client.async_mset_d2h(keys, dev_blob_lists, set_param)
-        except Exception as e:
-            raise RuntimeError(
-                f"async_mset_d2h failed for {len(keys)} keys: {e}"
-            ) from e
-
-        return UcmYuanrongTask(future=future, keys=keys)
-
-    # ------------------------------------------------------------------
-    # Task management
-    # ------------------------------------------------------------------
+        return self.dump_data(
+            block_ids=block_ids,
+            shard_index=shard_index,
+            src_addr=[[t.data_ptr() for t in row] for row in src_tensor],
+        )
 
     def wait(self, task: Task) -> None:
         """Block until the given transfer task completes.
@@ -456,10 +311,6 @@ class UcmYuanrongStore(UcmKVStoreBaseV1):
         Args:
             task: Task handle returned by load/dump/load_data/dump_data.
 
-        Raises:
-            TypeError: If task is not a UcmYuanrongTask.
-            RuntimeError: If the transfer failed (non-empty failed_keys) or
-                the future itself raised an error.
         """
         if not isinstance(task, UcmYuanrongTask):
             raise TypeError(
@@ -490,7 +341,18 @@ class UcmYuanrongStore(UcmKVStoreBaseV1):
         Args:
             task: Task handle returned by any transfer method.
 
-        Returns:
-            Always ``False``.
         """
         return False
+
+    @staticmethod
+    def to_rows(addr)->List[List[int]]:
+        """Convert a 2D structure of addresses to a list of lists of ints.
+
+        Handles both list-of-lists and 2D numpy array inputs.
+
+        Args:
+            addr: Either a list of lists of ints or a 2D numpy array.
+        """
+        if hasattr(addr, "tolist"):
+            return addr.tolist()
+        return [list(row) for row in addr]
