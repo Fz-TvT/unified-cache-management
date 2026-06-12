@@ -142,7 +142,6 @@ class UcmYuanrongStoreTest(unittest.TestCase):
 
     def test_initializes_hetero_client_and_registers_factory(self):
         from ucm.store.factory_v1 import UcmConnectorFactoryV1
-        from ucm.store.yuanrongstore.yuanrong_connector import UcmYuanrongStore
 
         store = UcmConnectorFactoryV1.create_connector(
             "UcmYuanrongStore",
@@ -196,7 +195,7 @@ class UcmYuanrongStoreTest(unittest.TestCase):
         self.assertIs(task.future, client.next_future)
         self.assertEqual(task.keys, keys)
         self.assertEqual([blob.dev_ptr for blob in blob_lists[0].blob_list], [101, 102])
-        self.assertEqual([blob.size for blob in blob_lists[0].blob_list], [64, 64])
+        self.assertEqual([blob.size for blob in blob_lists[0].blob_list], [64, 128])
         self.assertEqual(blob_lists[0].dev_idx, 2)
 
         store.wait(task)
@@ -236,14 +235,14 @@ class UcmYuanrongStoreTest(unittest.TestCase):
         lookup_only_client = FakeHeteroClient.instances[-1]
         lookup_only_client.exists = [True]
         self.assertEqual(lookup_only_store.lookup([b"\x10" * 16]), [True])
-        with self.assertRaisesRegex(ValueError, "transfer size"):
+        with self.assertRaisesRegex(ValueError, "tensor_size_list"):
             lookup_only_store.dump_data([b"\x11" * 16], [0], [[601]])
 
         store = self.make_store()
-        with self.assertRaisesRegex(ValueError, "same length"):
+        with self.assertRaisesRegex(ValueError, "block_ids length"):
             store.dump_data([b"\x0e" * 16], [0, 1], [[501]])
-        with self.assertRaisesRegex(ValueError, "address rows"):
-            store.load_data([b"\x0f" * 16], [0], [])
+        with self.assertRaisesRegex(ValueError, "addr_rows"):
+            store.load_data([b"\x0f" * 16], [0], [[]])
 
 
 if __name__ == "__main__":
