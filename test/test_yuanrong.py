@@ -53,6 +53,7 @@ def test_lookup_found():
     store.wait(task)
 
     masks = store.lookup(block_ids)
+    print(mask)
     assert all(mask is True for mask in masks)
 
 def test_lookup_not_found():
