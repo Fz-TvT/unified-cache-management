@@ -17,6 +17,16 @@ from ucm.store.yuanrong.connector import UcmYuanrongStore
 logger = init_logger(__name__)
 
 # ---------------------------------------------------------------------------
+# Device detection — use NPU if available, otherwise fall back to CPU
+# ---------------------------------------------------------------------------
+if hasattr(torch, "npu") and torch.npu.is_available():
+    DEVICE = "npu"
+    print(f"[yuanrong test] Using NPU device")
+else:
+    DEVICE = "cpu"
+    print(f"[yuanrong test] Using CPU (yuanrong D2H will likely time out without a device)")
+
+# ---------------------------------------------------------------------------
 # Configuration — point these at your running yuanrong worker
 # ---------------------------------------------------------------------------
 YUANRONG_CONFIG = {
@@ -52,7 +62,7 @@ def test_debug_diagnose():
 
     print("[诊断] 步骤3: 创建 CPU tensor 并 dump...")
     try:
-        t = torch.randn(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE)
+        t = torch.randn(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE, device=DEVICE)
         bid = block_id_from_tensor(t)
         task = store.dump([bid], [0], [[t]])
         print("[诊断] ✅ dump 已发起，等待完成...")
@@ -72,7 +82,7 @@ def test_debug_diagnose():
 
     print("[诊断] 步骤5: load 刚才写入的数据...")
     try:
-        dst = torch.empty(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE)
+        dst = torch.empty(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE, device=DEVICE)
         task = store.load([bid], [0], [[dst]])
         store.wait(task)
         print(f"[诊断] ✅ load 完成，内容一致: {torch.equal(t, dst)}")
@@ -98,7 +108,7 @@ def block_id_from_tensor(tensor: torch.Tensor) -> bytes:
 def test_lookup_found():
     """lookup returns True for block IDs that exist after dump."""
     print("\n[DEBUG] 创建 tensor 和 block_id...")
-    block_data = [torch.randn(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE) for _ in range(5)]
+    block_data = [torch.randn(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE, device=DEVICE) for _ in range(5)]
     block_ids = [block_id_from_tensor(t) for t in block_data]
     shard_index = [0] * len(block_ids)
     src_tensors = [[t] for t in block_data]
@@ -131,7 +141,7 @@ def test_lookup_not_found():
 
 def test_dump_once():
     """Dump data once and confirm it is visible via lookup."""
-    block_data = [torch.randn(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE) for _ in range(5)]
+    block_data = [torch.randn(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE, device=DEVICE) for _ in range(5)]
     block_ids = [block_id_from_tensor(t) for t in block_data]
     shard_index = [0] * len(block_ids)
     src_tensors = [[t] for t in block_data]
@@ -146,7 +156,7 @@ def test_dump_once():
 
 def test_dump_repeated():
     """Repeated dump of the same block IDs does not raise."""
-    block_data = [torch.randn(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE) for _ in range(5)]
+    block_data = [torch.randn(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE, device=DEVICE) for _ in range(5)]
     block_ids = [block_id_from_tensor(t) for t in block_data]
     shard_index = [0] * len(block_ids)
     src_tensors = [[t] for t in block_data]
@@ -168,8 +178,8 @@ def test_dump_repeated():
 
 def test_load_existing_data():
     """Load back the data that was previously dumped — content must match."""
-    block_data = [torch.randn(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE) for _ in range(5)]
-    dst_data = [torch.empty(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE) for _ in range(5)]
+    block_data = [torch.randn(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE, device=DEVICE) for _ in range(5)]
+    dst_data = [torch.empty(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE, device=DEVICE) for _ in range(5)]
     block_ids = [block_id_from_tensor(t) for t in block_data]
     shard_index = [0] * len(block_ids)
     src_tensors = [[t] for t in block_data]
@@ -191,8 +201,8 @@ def test_load_existing_data():
 
 def test_load_non_existent_data():
     """Loading data that was never written raises RuntimeError."""
-    block_data = [torch.randn(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE) for _ in range(5)]
-    dst_data = [torch.empty(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE) for _ in range(5)]
+    block_data = [torch.randn(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE, device=DEVICE) for _ in range(5)]
+    dst_data = [torch.empty(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE, device=DEVICE) for _ in range(5)]
     block_ids = [block_id_from_tensor(t) for t in block_data]
     shard_index = [0] * len(block_ids)
     dst_tensors = [[t] for t in dst_data]
@@ -216,7 +226,7 @@ def test_load_non_existent_data():
 
 def test_lookup_on_prefix_full_hit():
     """lookup_on_prefix returns last index when every block is present."""
-    block_data = [torch.randn(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE) for _ in range(3)]
+    block_data = [torch.randn(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE, device=DEVICE) for _ in range(3)]
     block_ids = [block_id_from_tensor(t) for t in block_data]
     shard_index = [0] * len(block_ids)
     src_tensors = [[t] for t in block_data]
@@ -231,7 +241,7 @@ def test_lookup_on_prefix_full_hit():
 
 def test_lookup_on_prefix_first_miss():
     """lookup_on_prefix returns -1 when the first block is missing."""
-    block_data = [torch.randn(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE) for _ in range(3)]
+    block_data = [torch.randn(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE, device=DEVICE) for _ in range(3)]
     block_ids = [block_id_from_tensor(t) for t in block_data]
 
     store = UcmYuanrongStore(YUANRONG_CONFIG)
