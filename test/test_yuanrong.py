@@ -247,3 +247,5 @@ def test_lookup_on_prefix_first_miss():
     # Prefix scan should stop at the very first block (miss)
     idx = store.lookup_on_prefix(block_ids)
     assert idx == -1
+if __name__ == "__main__":
+    debug_diagnose()
