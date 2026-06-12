@@ -37,7 +37,7 @@ class FakeSetParam:
 class FakeHeteroClient:
     """Stand-in for yr.datasystem.hetero_client.HeteroClient."""
 
-    def __init__(self):
+    def __init__(self, host=None, port=None):
         self.init_called = False
         self.init_host = None
         self.init_port = None

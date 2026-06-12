@@ -63,7 +63,13 @@ class UcmYuanrongStore(UcmKVStoreBaseV1):
 
         # Initialize HeteroClient and connect to yuanrong worker
         self.client = self._HeteroClient(self.host, self.port)
+        ret = self.client.init(self.host, self.port)
 
+        if ret != 0:
+            raise RuntimeError(
+                f"Failed to initialize HeteroClient with {self.host}:{self.port}, "
+                f"return code: {ret}."
+            )
 
         logger.info(
             "UcmYuanrongStore initialized: host=%s, port=%s, device_id=%s, timeout_ms=%s",
