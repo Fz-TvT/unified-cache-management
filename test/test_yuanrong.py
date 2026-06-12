@@ -17,16 +17,6 @@ from ucm.store.yuanrong.connector import UcmYuanrongStore
 logger = init_logger(__name__)
 
 # ---------------------------------------------------------------------------
-# Device detection — prefer Ascend NPU, fall back to CUDA
-# ---------------------------------------------------------------------------
-if hasattr(torch, "npu") and torch.npu.is_available():
-    DEVICE = "npu"
-elif torch.cuda.is_available():
-    DEVICE = "cuda"
-else:
-    DEVICE = "cpu"
-
-# ---------------------------------------------------------------------------
 # Configuration — point these at your running yuanrong worker
 # ---------------------------------------------------------------------------
 YUANRONG_CONFIG = {
@@ -62,7 +52,7 @@ def test_lookup_not_found():
 
 def test_lookup_found():
     """lookup returns True for block IDs that exist after dump."""
-    block_data = [torch.randn(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE, device=DEVICE) for _ in range(5)]
+    block_data = [torch.randn(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE) for _ in range(5)]
     block_ids = [block_id_from_tensor(t) for t in block_data]
     shard_index = [0] * len(block_ids)
     src_tensors = [[t] for t in block_data]
@@ -82,7 +72,7 @@ def test_lookup_found():
 
 def test_dump_once():
     """Dump data once and confirm it is visible via lookup."""
-    block_data = [torch.randn(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE, device=DEVICE) for _ in range(5)]
+    block_data = [torch.randn(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE) for _ in range(5)]
     block_ids = [block_id_from_tensor(t) for t in block_data]
     shard_index = [0] * len(block_ids)
     src_tensors = [[t] for t in block_data]
@@ -97,7 +87,7 @@ def test_dump_once():
 
 def test_dump_repeated():
     """Repeated dump of the same block IDs does not raise."""
-    block_data = [torch.randn(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE, device=DEVICE) for _ in range(5)]
+    block_data = [torch.randn(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE) for _ in range(5)]
     block_ids = [block_id_from_tensor(t) for t in block_data]
     shard_index = [0] * len(block_ids)
     src_tensors = [[t] for t in block_data]
@@ -119,8 +109,8 @@ def test_dump_repeated():
 
 def test_load_existing_data():
     """Load back the data that was previously dumped — content must match."""
-    block_data = [torch.randn(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE, device=DEVICE) for _ in range(5)]
-    dst_data = [torch.empty(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE, device=DEVICE) for _ in range(5)]
+    block_data = [torch.randn(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE) for _ in range(5)]
+    dst_data = [torch.empty(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE) for _ in range(5)]
     block_ids = [block_id_from_tensor(t) for t in block_data]
     shard_index = [0] * len(block_ids)
     src_tensors = [[t] for t in block_data]
@@ -142,8 +132,8 @@ def test_load_existing_data():
 
 def test_load_non_existent_data():
     """Loading data that was never written raises RuntimeError."""
-    block_data = [torch.randn(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE, device=DEVICE) for _ in range(5)]
-    dst_data = [torch.empty(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE, device=DEVICE) for _ in range(5)]
+    block_data = [torch.randn(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE) for _ in range(5)]
+    dst_data = [torch.empty(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE) for _ in range(5)]
     block_ids = [block_id_from_tensor(t) for t in block_data]
     shard_index = [0] * len(block_ids)
     dst_tensors = [[t] for t in dst_data]
@@ -167,7 +157,7 @@ def test_load_non_existent_data():
 
 def test_lookup_on_prefix_full_hit():
     """lookup_on_prefix returns last index when every block is present."""
-    block_data = [torch.randn(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE, device=DEVICE) for _ in range(3)]
+    block_data = [torch.randn(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE) for _ in range(3)]
     block_ids = [block_id_from_tensor(t) for t in block_data]
     shard_index = [0] * len(block_ids)
     src_tensors = [[t] for t in block_data]
@@ -182,7 +172,7 @@ def test_lookup_on_prefix_full_hit():
 
 def test_lookup_on_prefix_first_miss():
     """lookup_on_prefix returns -1 when the first block is missing."""
-    block_data = [torch.randn(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE, device=DEVICE) for _ in range(3)]
+    block_data = [torch.randn(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE) for _ in range(3)]
     block_ids = [block_id_from_tensor(t) for t in block_data]
 
     store = UcmYuanrongStore(YUANRONG_CONFIG)

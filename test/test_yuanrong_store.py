@@ -37,16 +37,19 @@ class FakeSetParam:
 class FakeHeteroClient:
     """Stand-in for yr.datasystem.hetero_client.HeteroClient."""
 
-    def __init__(self, host=None, port=None, connect_timeout_ms=None):
-        self.init_called = True
-        self.init_host = host
-        self.init_port = port
+    def __init__(self):
+        self.init_called = False
+        self.init_host = None
+        self.init_port = None
         # MagicMock 作为方法，调用后自动记录调用信息并返回 MagicMock
         self.exist = MagicMock()
         self.async_mget_h2d = MagicMock()
         self.async_mset_d2h = MagicMock()
 
-    def init(self):
+    def init(self, host, port):
+        self.init_called = True
+        self.init_host = host
+        self.init_port = port
         return 0
 
 
@@ -141,7 +144,7 @@ class TestInit:
     def test_init_when_client_init_fails_raises_runtime_error(self, mock_sdk):
         """If HeteroClient.init() returns non-zero, raise RuntimeError."""
         class FailingHeteroClient(FakeHeteroClient):
-            def init(self):
+            def init(self, host, port):
                 return -1
 
         with patch("yr.datasystem.hetero_client.HeteroClient", FailingHeteroClient):
