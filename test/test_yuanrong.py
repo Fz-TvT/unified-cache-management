@@ -41,15 +41,6 @@ def block_id_from_tensor(tensor: torch.Tensor) -> bytes:
 # lookup
 # ---------------------------------------------------------------------------
 
-
-def test_lookup_not_found():
-    """lookup returns False for block IDs that have never been written."""
-    store = UcmYuanrongStore(YUANRONG_CONFIG)
-    block_ids = [uuid.uuid4().bytes for _ in range(10)]
-    masks = store.lookup(block_ids)
-    assert all(mask is False for mask in masks)
-
-
 def test_lookup_found():
     """lookup returns True for block IDs that exist after dump."""
     block_data = [torch.randn(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE) for _ in range(5)]
@@ -63,6 +54,14 @@ def test_lookup_found():
 
     masks = store.lookup(block_ids)
     assert all(mask is True for mask in masks)
+
+def test_lookup_not_found():
+    """lookup returns False for block IDs that have never been written."""
+    store = UcmYuanrongStore(YUANRONG_CONFIG)
+    block_ids = [uuid.uuid4().bytes for _ in range(10)]
+    masks = store.lookup(block_ids)
+    assert all(mask is False for mask in masks)
+
 
 
 # ---------------------------------------------------------------------------
