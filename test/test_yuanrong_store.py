@@ -38,18 +38,15 @@ class FakeHeteroClient:
     """Stand-in for yr.datasystem.hetero_client.HeteroClient."""
 
     def __init__(self, host=None, port=None):
-        self.init_called = False
-        self.init_host = None
-        self.init_port = None
+        self.init_called = True
+        self.init_host = host
+        self.init_port = port
         # MagicMock 作为方法，调用后自动记录调用信息并返回 MagicMock
         self.exist = MagicMock()
         self.async_mget_h2d = MagicMock()
         self.async_mset_d2h = MagicMock()
 
-    def init(self, host, port):
-        self.init_called = True
-        self.init_host = host
-        self.init_port = port
+    def init(self):
         return 0
 
 
@@ -142,13 +139,13 @@ class TestInit:
             UcmYuanrongStore({"host": "127.0.0.1", "port": 18482})
 
     def test_init_when_client_init_fails_raises_runtime_error(self, mock_sdk):
-        """If HeteroClient.init() returns non-zero, raise RuntimeError."""
+        """If HeteroClient.init() raises, the error should propagate."""
         class FailingHeteroClient(FakeHeteroClient):
-            def init(self, host, port):
-                return -1
+            def init(self):
+                raise RuntimeError("connection refused")
 
         with patch("yr.datasystem.hetero_client.HeteroClient", FailingHeteroClient):
-            with pytest.raises(RuntimeError, match="Failed to initialize"):
+            with pytest.raises(RuntimeError):
                 UcmYuanrongStore({"host": "127.0.0.1", "port": 18482})
 
 
