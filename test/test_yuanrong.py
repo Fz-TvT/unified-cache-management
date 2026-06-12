@@ -221,7 +221,7 @@ class UcmYuanrongStoreTest(unittest.TestCase):
         client.next_future = FakeFuture(["bad-key"])
         task = store.load_data([b"\x0d" * 16], [0], [[401]])
 
-        with self.assertRaisesRegex(RuntimeError, "Transfer failed for 1 keys"):
+        with self.assertRaisesRegex(RuntimeError, "Transfer failed for 1 / 1 keys"):
             store.wait(task)
 
     def test_config_and_input_validation(self):
