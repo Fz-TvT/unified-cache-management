@@ -30,6 +30,60 @@ _TENSOR_SHAPE = (1, 256)
 _TENSOR_DTYPE = torch.float32
 
 
+def debug_diagnose():
+    """快速诊断：逐步测试，看到底哪一步失败。"""
+    import sys
+    print("=" * 50)
+    print("[诊断] 步骤1: 连接 yuanrong worker...")
+    try:
+        store = UcmYuanrongStore(YUANRONG_CONFIG)
+        print("[诊断] ✅ 连接成功")
+    except Exception as e:
+        print(f"[诊断] ❌ 连接失败: {e}")
+        return
+
+    print("[诊断] 步骤2: lookup 随机不存在的 key...")
+    try:
+        masks = store.lookup([uuid.uuid4().bytes])
+        print(f"[诊断] ✅ lookup 返回 {masks}")
+    except Exception as e:
+        print(f"[诊断] ❌ lookup 失败: {e}")
+        return
+
+    print("[诊断] 步骤3: 创建 CPU tensor 并 dump...")
+    try:
+        t = torch.randn(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE)
+        bid = block_id_from_tensor(t)
+        task = store.dump([bid], [0], [[t]])
+        print("[诊断] ✅ dump 已发起，等待完成...")
+        store.wait(task)
+        print("[诊断] ✅ dump 完成")
+    except Exception as e:
+        print(f"[诊断] ❌ dump 失败: {e}")
+        return
+
+    print("[诊断] 步骤4: lookup 刚才写入的 key...")
+    try:
+        masks = store.lookup([bid])
+        print(f"[诊断] ✅ lookup 返回 {masks}")
+    except Exception as e:
+        print(f"[诊断] ❌ lookup 失败: {e}")
+        return
+
+    print("[诊断] 步骤5: load 刚才写入的数据...")
+    try:
+        dst = torch.empty(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE)
+        task = store.load([bid], [0], [[dst]])
+        store.wait(task)
+        print(f"[诊断] ✅ load 完成，内容一致: {torch.equal(t, dst)}")
+    except Exception as e:
+        print(f"[诊断] ❌ load 失败: {e}")
+        return
+
+    print("=" * 50)
+    print("[诊断] 全部通过！yuanrong store 工作正常。")
+
+
 def block_id_from_tensor(tensor: torch.Tensor) -> bytes:
     """Generate a deterministic block ID from tensor content."""
     tensor_bytes = tensor.clone().detach().cpu().numpy().tobytes()
@@ -43,17 +97,22 @@ def block_id_from_tensor(tensor: torch.Tensor) -> bytes:
 
 def test_lookup_found():
     """lookup returns True for block IDs that exist after dump."""
+    print("\n[DEBUG] 创建 tensor 和 block_id...")
     block_data = [torch.randn(_TENSOR_SHAPE, dtype=_TENSOR_DTYPE) for _ in range(5)]
     block_ids = [block_id_from_tensor(t) for t in block_data]
     shard_index = [0] * len(block_ids)
     src_tensors = [[t] for t in block_data]
 
+    print("[DEBUG] 连接 yuanrong worker...")
     store = UcmYuanrongStore(YUANRONG_CONFIG)
+    print("[DEBUG] 连接成功，执行 dump...")
     task = store.dump(block_ids=block_ids, shard_index=shard_index, src_tensor=src_tensors)
+    print("[DEBUG] dump 已发起，等待完成...")
     store.wait(task)
+    print("[DEBUG] dump 完成，执行 lookup...")
 
     masks = store.lookup(block_ids)
-    print(mask)
+    print(f"[DEBUG] lookup 结果: {masks}")
     assert all(mask is True for mask in masks)
 
 def test_lookup_not_found():
