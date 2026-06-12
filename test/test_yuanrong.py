@@ -30,7 +30,7 @@ _TENSOR_SHAPE = (1, 256)
 _TENSOR_DTYPE = torch.float32
 
 
-def debug_diagnose():
+def test_debug_diagnose():
     """快速诊断：逐步测试，看到底哪一步失败。"""
     import sys
     print("=" * 50)
