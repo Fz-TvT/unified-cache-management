@@ -63,7 +63,7 @@ class UcmYuanrongStore(UcmKVStoreBaseV1):
 
         # Initialize HeteroClient and connect to yuanrong worker
         self.client = self._HeteroClient(self.host, self.port)
-        ret = self.client.init()
+        ret = self.client
 
         if ret != 0:
             raise RuntimeError(
