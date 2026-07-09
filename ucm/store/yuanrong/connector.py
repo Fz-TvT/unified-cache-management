@@ -9,7 +9,7 @@ from ucm.store.ucmstore_v1 import Task, UcmKVStoreBaseV1
 
 logger = init_logger(__name__)
 
-DEFAULT_TIMEOUT_MS: int = 60 * 1000  # 60 seconds
+DEFAULT_TIMEOUT_MS: int = 0  # 60 seconds
 
 @dataclass
 class UcmYuanrongTask(Task):
@@ -38,10 +38,12 @@ class UcmYuanrongStore(UcmKVStoreBaseV1):
         try:
             from yr.datasystem.hetero_client import Blob, DeviceBlobList, HeteroClient
             from yr.datasystem.kv_client import SetParam
+            from yr.datasystem.object_client import WriteMode
             self._Blob = Blob
             self._DeviceBlobList = DeviceBlobList
             self._HeteroClient = HeteroClient
             self._SetParam = SetParam
+            self._WriteMode = WriteMode
         except ImportError as e:
             raise ImportError(
                 "Please install yuanrong SDK and ensure 'yr.datasystem.hetero_client' "
@@ -236,8 +238,9 @@ class UcmYuanrongStore(UcmKVStoreBaseV1):
         keys = self._build_keys(block_ids, shard_index)
         dev_blob_lists = self._build_blob_lists(block_ids, src_addr)
 
-        # Create SetParam (use default for now)
+        # Create SetParam with write-back + evictable default
         set_param = self._SetParam()
+        set_param.write_mode = self._WriteMode.NONE_L2_CACHE_EVICT
 
         try:
             future = self.client.async_mset_d2h(keys, dev_blob_lists, set_param)
